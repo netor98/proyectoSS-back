@@ -17,7 +17,7 @@ class Settings(BaseSettings):
         raise ValueError(v)
 
     MYSQL_USER: str = "fastapi"
-    MYSQL_PASSWORD: str = "J%s%($KX1"
+    MYSQL_PASSWORD: str = "proyectoSS"
     MYSQL_HOST: str = "localhost"
     MYSQL_PORT: str = "3306"
     MYSQL_DATABASE: str = "proyecto_SS"
