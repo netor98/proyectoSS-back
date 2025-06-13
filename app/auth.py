@@ -131,7 +131,7 @@ async def login_for_access_token(
     if not userDB or not bcrypt.verify(user.password, userDB.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail="Credenciales incorrectas",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
