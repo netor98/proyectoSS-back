@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Boolean, Column, Integer, String
+
 from ..database import Base
 
 
@@ -11,5 +12,5 @@ class User(Base):
     first_names = Column(String(50), nullable=False)
     last_names = Column(String(50), nullable=False)
     hashed_password = Column(String(60))
-    is_active = Column(Boolean, default=True)
+    is_verified = Column(Boolean, default=False)
     avatar = Column(String(255), nullable=True)  # Store file path or URL

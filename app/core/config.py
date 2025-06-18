@@ -1,4 +1,3 @@
-
 from typing import Any, Dict, List, Optional, Union
 
 from pydantic import AnyHttpUrl, BaseSettings, validator
@@ -22,6 +21,21 @@ class Settings(BaseSettings):
     MYSQL_PORT: str = "3306"
     MYSQL_DATABASE: str = "proyecto_SS"
     DATABASE_URI: Optional[str] = None
+
+    # Email Configuration
+    MAIL_USERNAME: str = "pcu18021379@gmail.com"
+    MAIL_PASSWORD: str = "ffeg psfg prwy bveu"
+    MAIL_FROM: str = "noreply@proyectoss.com"
+    MAIL_PORT: int = 587
+    MAIL_SERVER: str = "smtp.gmail.com"
+    MAIL_FROM_NAME: str = "Proyecto Servicio Social"
+    MAIL_STARTTLS: bool = True
+    MAIL_SSL_TLS: bool = False
+    USE_CREDENTIALS: bool = True
+    VALIDATE_CERTS: bool = True
+
+    # Frontend URL for email verification links
+    FRONTEND_URL: str = "http://localhost:5173"
 
     @validator("DATABASE_URI", pre=True)
     def assemble_db_connection(cls, v: Optional[str], values: Dict[str, Any]) -> Any:

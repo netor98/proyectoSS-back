@@ -1,12 +1,16 @@
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI
-from app.core.config import settings
-from app.models import user
-from app.database import engine
-from .routers import users_routes, upload_routes
-from .auth import router as auth_router
-import sys
 import os
+import sys
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.core.config import settings
+from app.database import engine
+from app.models import user
+
+from .auth import router as auth_router
+from .routers import upload_routes, users_routes
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 origins = [
@@ -33,4 +37,5 @@ def get_application():
 
 
 user.Base.metadata.create_all(bind=engine)
+# user.Base.metadata.drop_all(bind=engine)
 app = get_application()

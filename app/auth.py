@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user_schema import UserCreate, UserResponse
+from app.services.email_service import (send_verification_email,
+                                        verify_email_verification_token)
 
 router = APIRouter(
     prefix="/auth",
@@ -41,6 +43,19 @@ class TokenData(BaseModel):
 class UserLogin(BaseModel):
     email: str
     password: str
+
+
+class EmailVerificationRequest(BaseModel):
+    token: str
+
+
+class PasswordResetRequest(BaseModel):
+    email: str
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
@@ -79,7 +94,7 @@ def verify_refresh_token(token: str):
 
 
 @router.post("/register", response_model=UserResponse)
-def register(user: UserCreate, db: Session = Depends(get_db)):
+async def register(user: UserCreate, db: Session = Depends(get_db)):
     errors = []
     db_user = db.query(User).filter(User.email == user.email).first()
 
@@ -88,6 +103,13 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 
     phoneNum_user = db.query(User).filter(
         User.phone_number == user.phone_number).first()
+
+
+    if len(user.employee_number) > 8 or not user.employee_number.isdigit():
+        errors.append("Número de empleado inválido")
+
+    if len(user.phone_number) > 10:
+        errors.append("Número de teléfono inválido")
 
     if employeeNum_user:
         errors.append("Número de empleado ya registrado")
@@ -110,6 +132,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
         last_names=user.last_names,
         employee_number=user.employee_number,
         phone_number=user.phone_number,
+        is_verified=False  # Set to False initially
     )
 
     # Add to database
@@ -117,7 +140,117 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_user)
 
+    # Send verification email
+    try:
+        await send_verification_email(db_user.email, db_user.first_names)
+    except Exception as e:
+        print(f"Error sending verification email: {e}")
+        # Don't fail registration if email fails
+        pass
+
     return db_user
+
+
+@router.post("/verify-email")
+async def verify_email(request: EmailVerificationRequest, db: Session = Depends(get_db)):
+    """Verify user email using the verification token"""
+    try:
+        # Verify the token and get email
+        email = verify_email_verification_token(request.token)
+
+        # Find user by email
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+        # Check if already verified
+        if user.is_verified:
+            return {"message": "Email ya verificado"}
+
+        # Update user verification status
+        user.is_verified = True
+        db.commit()
+
+        return {"message": "Email verificado exitosamente"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error verifying email: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+
+@router.post("/resend-verification")
+async def resend_verification_email(email: str, db: Session = Depends(get_db)):
+    """Resend verification email to user"""
+    user = db.query(User).filter(User.email == email).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    if user.is_verified:
+        raise HTTPException(status_code=400, detail="Email ya verificado")
+
+    try:
+        await send_verification_email(user.email, user.first_names)
+        return {"message": "Email de verificación enviado"}
+    except Exception as e:
+        print(f"Error sending verification email: {e}")
+        raise HTTPException(status_code=500, detail="Error enviando email de verificación")
+
+
+@router.post("/request-password-reset")
+async def request_password_reset(request: PasswordResetRequest, db: Session = Depends(get_db)):
+    """Request password reset email"""
+    user = db.query(User).filter(User.email == request.email).first()
+
+    # Don't reveal if user exists or not for security
+    if not user:
+        return {"message": "Si el email existe, recibirás instrucciones de recuperación"}
+
+    try:
+        # Create password reset token (1 hour expiry)
+        from app.services.email_service import create_email_verification_token
+        reset_token = create_email_verification_token(user.email)  # We can reuse the same token function
+
+        # Send password reset email
+        from app.services.email_service import send_password_reset_email
+        await send_password_reset_email(user.email, user.first_names, reset_token)
+
+        return {"message": "Si el email existe, recibirás instrucciones de recuperación"}
+    except Exception as e:
+        print(f"Error sending password reset email: {e}")
+        return {"message": "Si el email existe, recibirás instrucciones de recuperación"}
+
+
+@router.post("/reset-password")
+async def reset_password(request: PasswordResetConfirm, db: Session = Depends(get_db)):
+    """Reset password using token"""
+    try:
+        # Verify the reset token
+        from app.services.email_service import verify_email_verification_token
+        email = verify_email_verification_token(request.token)
+        
+        print(email)     
+        # Find user
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+        # Hash new password
+        hashed_password = bcrypt.hash(request.new_password)
+
+        # Update password
+        user.hashed_password = hashed_password
+        db.commit()
+
+        return {"message": "Contraseña restablecida exitosamente"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error resetting password: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
 @router.post("/token", response_model=Token)
@@ -134,6 +267,15 @@ async def login_for_access_token(
             detail="Credenciales incorrectas",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Check if email is verified
+    if not userDB.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email no verificado. Por favor verifica tu correo antes de iniciar sesión.",
+        )
+
+    print(userDB)
 
     # Create both access and refresh tokens
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)

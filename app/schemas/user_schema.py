@@ -1,5 +1,6 @@
-from pydantic import BaseModel
 from typing import Optional
+
+from pydantic import BaseModel
 
 
 class UserBase(BaseModel):
@@ -9,7 +10,7 @@ class UserBase(BaseModel):
     employee_number: str
     phone_number: str
     hashed_password: str
-    is_active: Optional[bool] = True
+    is_verified: Optional[bool] = False
     avatar: Optional[str] = None
 
 
@@ -24,7 +25,7 @@ class UserUpdate(BaseModel):
     employee_number: Optional[str] = None
     phone_number: Optional[str] = None
     hashed_password: Optional[str] = None
-    is_active: Optional[bool] = None
+    is_verified: Optional[bool] = None
     avatar: Optional[str] = None
 
 
